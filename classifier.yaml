@@ -1,0 +1,397 @@
+# PIPELINE DEFINITION
+# Name: classification
+# Inputs:
+#    dataset: str [Default: 'gs://protocell/data/classification.npz']
+#    epochs: int [Default: 10.0]
+#    foo: system.Dataset
+components:
+  comp-importer:
+    executorLabel: exec-importer
+    inputDefinitions:
+      parameters:
+        uri:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        artifact:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-split-data:
+    executorLabel: exec-split-data
+    inputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        ratio:
+          parameterType: NUMBER_DOUBLE
+    outputDefinitions:
+      artifacts:
+        test:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train-classifier:
+    executorLabel: exec-train-classifier
+    inputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        base_output_directory:
+          defaultValue: gs://protocell/pipeline_root
+          isOptional: true
+          parameterType: STRING
+        display_name:
+          defaultValue: train_classfier_display_name
+          isOptional: true
+          parameterType: STRING
+        enable_web_access:
+          defaultValue: false
+          isOptional: true
+          parameterType: BOOLEAN
+        encryption_spec_key_name:
+          defaultValue: ''
+          isOptional: true
+          parameterType: STRING
+        epochs:
+          parameterType: NUMBER_INTEGER
+        labels:
+          defaultValue: {}
+          isOptional: true
+          parameterType: STRUCT
+        location:
+          defaultValue: us-central1
+          isOptional: true
+          parameterType: STRING
+        network:
+          defaultValue: ''
+          isOptional: true
+          parameterType: STRING
+        project:
+          defaultValue: '{{$.pipeline_google_cloud_project_id}}'
+          isOptional: true
+          parameterType: STRING
+        reserved_ip_ranges:
+          defaultValue: []
+          isOptional: true
+          parameterType: LIST
+        restart_job_on_worker_restart:
+          defaultValue: false
+          isOptional: true
+          parameterType: BOOLEAN
+        service_account:
+          defaultValue: 429426973958-compute@developer.gserviceaccount.com
+          isOptional: true
+          parameterType: STRING
+        tensorboard:
+          defaultValue: projects/429426973958/locations/europe-central2/tensorboards/2373397003624251392
+          isOptional: true
+          parameterType: STRING
+        timeout:
+          defaultValue: 604800s
+          isOptional: true
+          parameterType: STRING
+        worker_pool_specs:
+          defaultValue:
+          - container_spec:
+              args:
+              - --executor_input
+              - '{{$.json_escape[1]}}'
+              - --function_to_execute
+              - train_classifier
+              command:
+              - sh
+              - -c
+              - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip\
+                \ || python3 -m ensurepip --user || apt-get install python3-pip\n\
+                fi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet\
+                \ --no-warn-script-location 'kfp==2.4.0' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+                \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+              - sh
+              - -ec
+              - 'program_path=$(mktemp -d)
+
+
+                printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+                _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+                '
+              - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing\
+                \ import *\n\ndef train_classifier(epochs: int, dataset: Input[Dataset],\
+                \ classifier: Output[Model]):\n    import numpy\n    import keras\n\
+                \    import os\n\n    from src.utils import save\n    from keras.layers\
+                \ import Conv2D, BatchNormalization, MaxPooling2D, Dropout, Flatten,\
+                \ Dense\n    from keras import callbacks\n    import tensorflow as\
+                \ tf\n\n    X, Y = numpy.load(dataset.path + \".npz\").values()\n\
+                \    X = X.reshape([-1, 70, 70, 1])\n    test  = (X[:100], Y[:100])\n\
+                \    val = (X[100:1100], Y[100:1100])\n    train = (X[1100:1200],\
+                \ Y[1100:1200]) #todo\n\n    classes = [\"other\", \"ellipse\", \"\
+                rectangle\", \"triangle\"]\n\n    # Preprocessing layers are bugged\
+                \ for some versions of keras\n    # Using DataGenerator instead\n\
+                \    datagen = tf.keras.preprocessing.image.ImageDataGenerator(\n\
+                \        horizontal_flip=True,\n        vertical_flip=True,\n    \
+                \    rotation_range=180,\n        shear_range=45.0,\n        zoom_range\
+                \ = [1.2, 2],\n        fill_mode='constant',\n        cval=0,\n  \
+                \  )\n\n    print(\">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\", os.environ['AIP_TENSORBOARD_LOG_DIR'])\n\
+                \    tensorboard = callbacks.TensorBoard(\n        # vertex-provided\
+                \ directory for logs\n        log_dir = os.environ['AIP_TENSORBOARD_LOG_DIR'],\n\
+                \        histogram_freq=1\n\n    )\n    checkpoints = callbacks.ModelCheckpoint(\n\
+                \        monitor='sparse_categorical_accuracy',\n        filepath='./weights.h5',\n\
+                \        save_weights_only=True,\n        save_best_only=True,\n \
+                \       mode='max'\n    )\n    plateau = callbacks.ReduceLROnPlateau(\n\
+                \        monitor='sparse_categorical_accuracy',\n        patience=10,\n\
+                \        verbose=1,\n        factor=0.90\n    )\n\n    model = keras.Sequential([\n\
+                \        keras.Input(shape=(70, 70, 1)),\n\n        Conv2D(64, (5,\
+                \ 5), padding='same', activation=\"relu\"),\n        BatchNormalization(),\n\
+                \        MaxPooling2D(pool_size=(2, 2)),\n        Dropout(0.1),\n\n\
+                \        Conv2D(32, (5, 5), padding='same', activation=\"relu\"),\n\
+                \        BatchNormalization(),\n        MaxPooling2D(pool_size=(2,\
+                \ 2)),\n        Dropout(0.1),\n\n        Conv2D(32, (3, 3), activation=\"\
+                relu\"),\n        BatchNormalization(),\n        MaxPooling2D(pool_size=(2,\
+                \ 2)),\n        Dropout(0.1),\n\n        Flatten(),\n        Dense(128,\
+                \ activation=\"relu\"), \n        BatchNormalization(),\n        Dense(len(classes),\
+                \ activation='softmax'),\n    ])\n\n    model.summary()\n\n    optimizer\
+                \ = keras.optimizers.Adam(learning_rate=4e-3, beta_1=0.9, beta_2=0.999,\
+                \ epsilon=1e-08, amsgrad=False)\n    model.compile(optimizer=optimizer,\
+                \ loss=\"sparse_categorical_crossentropy\", metrics = [\"sparse_categorical_accuracy\"\
+                ])\n\n    history = model.fit(\n        datagen.flow(*train, batch_size=64),\n\
+                \        validation_data=val,\n        epochs=epochs,\n        callbacks=[tensorboard,\
+                \ checkpoints, plateau]\n    )\n\n    save(model, f\"{classifier.path}/model.h5\"\
+                , frozen = True)\n\n"
+              env: []
+              image_uri: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
+            disk_spec:
+              boot_disk_size_gb: 100.0
+              boot_disk_type: pd-ssd
+            machine_spec:
+              machine_type: n1-standard-4
+            replica_count: 1.0
+          isOptional: true
+          parameterType: LIST
+    outputDefinitions:
+      artifacts:
+        classifier:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        gcp_resources:
+          parameterType: STRING
+  comp-visualize:
+    executorLabel: exec-visualize
+    inputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        plot:
+          artifactType:
+            schemaTitle: system.Markdown
+            schemaVersion: 0.0.1
+defaultPipelineRoot: gs://protocell/pipeline_root
+deploymentSpec:
+  executors:
+    exec-importer:
+      importer:
+        artifactUri:
+          runtimeParameter: uri
+        typeSchema:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+    exec-split-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - split_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef split_data(ratio: float, dataset: Input[Dataset], train: Output[Dataset],\
+          \ test: Output[Dataset]):\n    import numpy\n    X, Y = numpy.load(dataset.path).values()\n\
+          \    test_size = int(ratio * len(X))\n\n    train_set = (X[test_size:],\
+          \ Y[test_size:])\n    test_set  = (X[:test_size], Y[:test_size])\n\n   \
+          \ numpy.savez(train.path, *train_set)\n    numpy.savez(test.path, *test_set)\n\
+          \n"
+        image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
+    exec-train-classifier:
+      container:
+        args:
+        - --type
+        - CustomJob
+        - --payload
+        - '{"display_name": "{{$.inputs.parameters[''display_name'']}}", "job_spec":
+          {"worker_pool_specs": {{$.inputs.parameters[''worker_pool_specs'']}}, "scheduling":
+          {"timeout": "{{$.inputs.parameters[''timeout'']}}", "restart_job_on_worker_restart":
+          {{$.inputs.parameters[''restart_job_on_worker_restart'']}}}, "service_account":
+          "{{$.inputs.parameters[''service_account'']}}", "tensorboard": "{{$.inputs.parameters[''tensorboard'']}}",
+          "enable_web_access": {{$.inputs.parameters[''enable_web_access'']}}, "network":
+          "{{$.inputs.parameters[''network'']}}", "reserved_ip_ranges": {{$.inputs.parameters[''reserved_ip_ranges'']}},
+          "base_output_directory": {"output_uri_prefix": "{{$.inputs.parameters[''base_output_directory'']}}"}},
+          "labels": {{$.inputs.parameters[''labels'']}}, "encryption_spec": {"kms_key_name":
+          "{{$.inputs.parameters[''encryption_spec_key_name'']}}"}}'
+        - --project
+        - '{{$.inputs.parameters[''project'']}}'
+        - --location
+        - '{{$.inputs.parameters[''location'']}}'
+        - --gcp_resources
+        - '{{$.outputs.parameters[''gcp_resources''].output_file}}'
+        command:
+        - python3
+        - -u
+        - -m
+        - google_cloud_pipeline_components.container.v1.custom_job.launcher
+        image: gcr.io/ml-pipeline/google-cloud-pipeline-components:2.8.0
+    exec-visualize:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - visualize
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef visualize(model: Input[Model], plot: Output[Markdown]):     \
+          \                                                    \n\n    print(f\"Visualizing!\"\
+          )\n\n    from src.utils import capture_image\n\n    import matplotlib.pyplot\
+          \ as plt\n    import numpy as np\n\n    plt.plot(np.arange(10))\n    img\
+          \ = capture_image()\n    with open(plot.path, 'w') as f:\n        f.write(f\"\
+          ![Image]({img})\")\n\n"
+        image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
+pipelineInfo:
+  name: classification
+root:
+  dag:
+    tasks:
+      importer:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-importer
+        inputs:
+          parameters:
+            uri:
+              componentInputParameter: dataset
+        taskInfo:
+          name: importer
+      split-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-split-data
+        dependentTasks:
+        - importer
+        inputs:
+          artifacts:
+            dataset:
+              taskOutputArtifact:
+                outputArtifactKey: artifact
+                producerTask: importer
+          parameters:
+            ratio:
+              runtimeValue:
+                constant: 0.1
+        taskInfo:
+          name: split-data
+      train-classifier:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-classifier
+        dependentTasks:
+        - split-data
+        inputs:
+          artifacts:
+            dataset:
+              taskOutputArtifact:
+                outputArtifactKey: train
+                producerTask: split-data
+          parameters:
+            epochs:
+              componentInputParameter: epochs
+            location:
+              runtimeValue:
+                constant: europe-central2
+        taskInfo:
+          name: train-classifier
+      visualize:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-visualize
+        dependentTasks:
+        - train-classifier
+        inputs:
+          artifacts:
+            model:
+              taskOutputArtifact:
+                outputArtifactKey: classifier
+                producerTask: train-classifier
+        taskInfo:
+          name: visualize
+  inputDefinitions:
+    artifacts:
+      foo:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+        isOptional: true
+    parameters:
+      dataset:
+        defaultValue: gs://protocell/data/classification.npz
+        isOptional: true
+        parameterType: STRING
+      epochs:
+        defaultValue: 10.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.4.0
