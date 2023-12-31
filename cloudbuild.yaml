@@ -1,0 +1,21 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_IMAGE}', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['tag', '${_IMAGE}', '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE_TAG}']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE_TAG}']
+
+substitutions:
+  _PROJECT_ID: "protocell-404013"
+  _REGION: "europe-central2"
+  _REPOSITORY: "kubeflow-images"
+  _IMAGE: 'keras'
+  _IMAGE_TAG: 'keras:latest'
+
+#  - id: run build.sh
+#    name: gcr.io/cloud-builders/gcloud
+#    entrypoint: bash
+#    args: ['./build.sh']
