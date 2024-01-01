@@ -1,6 +1,7 @@
 from kfp.dsl import component, Dataset, Input, Output, Model, Markdown
+from src.secrets import configs
 
-@component(base_image="europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest")
+@component(base_image=configs.keras_image)
 def visualize(model: Input[Model], plot: Output[Markdown]):                                                         
     
     print(f"Visualizing!")

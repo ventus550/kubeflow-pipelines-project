@@ -1,6 +1,7 @@
 from kfp.dsl import component, Dataset, Input, Output
+from src.secrets import configs
 
-@component(base_image="europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest")
+@component(base_image = configs.keras_image)
 def split_data(ratio: float, dataset: Input[Dataset], train: Output[Dataset], test: Output[Dataset]):
     import numpy
     X, Y = numpy.load(dataset.path).values()

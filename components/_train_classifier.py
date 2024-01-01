@@ -1,6 +1,7 @@
 from kfp.dsl import component, Dataset, Input, Output, Model
+from src.secrets import configs
 
-@component(base_image="europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest")
+@component(base_image=configs.keras_image)
 def train_classifier(epochs: int, dataset: Input[Dataset], classifier: Output[Model]):
     import numpy
     import keras

@@ -1,5 +1,5 @@
 # PIPELINE DEFINITION
-# Name: classification
+# Name: oracle
 # Inputs:
 #    dataset: str [Default: 'gs://protocell/data/classification.npz']
 #    epochs: int [Default: 10.0]
@@ -48,11 +48,11 @@ components:
             schemaVersion: 0.0.1
       parameters:
         base_output_directory:
-          defaultValue: gs://protocell/pipeline_root
+          defaultValue: gs://protocell/pipeline
           isOptional: true
           parameterType: STRING
         display_name:
-          defaultValue: train_classfier_display_name
+          defaultValue: oracle
           isOptional: true
           parameterType: STRING
         enable_web_access:
@@ -202,7 +202,7 @@ components:
           artifactType:
             schemaTitle: system.Markdown
             schemaVersion: 0.0.1
-defaultPipelineRoot: gs://protocell/pipeline_root
+defaultPipelineRoot: gs://protocell/pipeline
 deploymentSpec:
   executors:
     exec-importer:
@@ -307,7 +307,7 @@ deploymentSpec:
           ![Image]({img})\")\n\n"
         image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
 pipelineInfo:
-  name: classification
+  name: oracle
 root:
   dag:
     tasks:

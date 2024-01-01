@@ -10,31 +10,29 @@ from kfp.dsl import (
 
 import google_cloud_pipeline_components.v1.custom_job.utils as custom_job
 import components
+from src.secrets import configs
 # -
-
-# ## Configuration
-
-BUCKET_URI = f"gs://protocell"
-PIPELINE_ROOT = f"{BUCKET_URI}/pipeline_root"
-LOCATION = "europe-central2"
-PROJECT = "protocell-404013"
-DATA = f"{BUCKET_URI}/data"
-ARTIFACTORY = f"https://{LOCATION}-kfp.pkg.dev/{PROJECT}/kubeflows"
-PIPELINE_TEMPLATE_NAME = "classifier.yaml"
-
-
-# https://cloud.google.com/python/docs/reference/aiplatform/latest/google.cloud.aiplatform.Tensorboard
-aiplatform.init(location=LOCATION, project=PROJECT, staging_bucket=BUCKET_URI)
-tensorboard = aiplatform.Tensorboard(location=LOCATION, project=PROJECT, tensorboard_name = "2373397003624251392")
-
 
 # ## Pipeline definition
 
-@dsl.pipeline(
-    pipeline_root=PIPELINE_ROOT,
-    name="classification",
+# +
+TENSORBOARD_ID = "2373397003624251392"
+
+tensorboard = aiplatform.Tensorboard(
+    location=configs.location,
+    project=configs.project,
+    tensorboard_name = TENSORBOARD_ID
 )
-def pipeline(dataset: str = f"{DATA}/classification.npz", epochs: int = 10, foo: Input[Dataset] = None):
+
+@dsl.pipeline(
+    pipeline_root=configs.pipeline_directory,
+    name=configs.model,
+)
+def pipeline(
+    dataset: str = f"{configs.data_directory}/classification.npz",
+    epochs: int = 10,
+    foo: Input[Dataset] = None
+):
     
     importer = dsl.importer(
         artifact_uri=dataset,
@@ -46,30 +44,24 @@ def pipeline(dataset: str = f"{DATA}/classification.npz", epochs: int = 10, foo:
     
     train_classifier_op = custom_job.create_custom_training_job_op_from_component(
         component_spec = components.train_classifier,
-        display_name = "train_classfier_display_name",
+        display_name = configs.model,
         tensorboard = tensorboard.resource_name,
-        base_output_directory = PIPELINE_ROOT,
-        service_account = "429426973958-compute@developer.gserviceaccount.com"
+        base_output_directory = configs.pipeline_directory,
+        service_account = configs.service_account
     )
     
-    train_classifier = train_classifier_op(epochs=epochs, dataset=data.outputs["train"], location = LOCATION)
+    train_classifier = train_classifier_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
     
-
     components.visualize(model=train_classifier.outputs["classifier"])
+
+
+# -
 
 
 # ## Compilation and upload
 
-# +
-client = RegistryClient(host=ARTIFACTORY)
+client = RegistryClient(host=configs.artifactory)
+compiler.Compiler().compile(pipeline_func=pipeline, package_path=configs.pipeline_name)
+client.upload_pipeline(file_name=configs.pipeline_name, tags=["latest"])
 
-compiler.Compiler().compile(
-    pipeline_func=pipeline,
-    package_path=PIPELINE_TEMPLATE_NAME
-)
 
-templateName, versionName = client.upload_pipeline(
-  file_name=PIPELINE_TEMPLATE_NAME,
-  tags=["latest"],
-  extra_headers={"description":"testing"}
-)
