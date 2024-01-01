@@ -33,15 +33,15 @@ def pipeline(
     epochs: int = 10,
     foo: Input[Dataset] = None
 ):
-    
+
     importer = dsl.importer(
         artifact_uri=dataset,
         artifact_class=Dataset,
         reimport=False,
     )
-    
+
     data = components.split_data(ratio=0.1, dataset=importer.output)
-    
+
     train_classifier_op = custom_job.create_custom_training_job_op_from_component(
         component_spec = components.train_classifier,
         display_name = configs.model,
@@ -49,9 +49,9 @@ def pipeline(
         base_output_directory = configs.pipeline_directory,
         service_account = configs.service_account
     )
-    
+
     train_classifier = train_classifier_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
-    
+
     components.visualize(model=train_classifier.outputs["classifier"])
 
 

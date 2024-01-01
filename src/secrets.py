@@ -36,7 +36,7 @@ class Configs:
 
     @property
     def artifactory(self):
-        return f"https://{self.location}-kfp.pkg.dev/{self.project}/{self.data["artifactory"]}"
+        return f"https://{self.location}-kfp.pkg.dev/{self.project}/{self.data['artifactory']}"
 
     @property
     def docker(self):
