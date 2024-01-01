@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from pathlib import Path
 from itertools import groupby
+from src.utils import SampleBatch
 import numpy as np
 
 
@@ -79,3 +80,21 @@ def ctc_decode(classes, timesteps, path_algorithm=best_path_search):
     path = path_algorithm(timesteps)
     characters = [classes[key] for key, _ in groupby(path) if key < len(classes)]
     return "".join(characters)
+
+
+def batch_prediction(model, X, Y):
+    P = model.predict(X)
+    L = [ctc_decode(characters, p) for p in P]
+    D = [edit_distance([y], [p]) for y, p in zip(Y, P)]
+    return SampleBatch(X, L, D)
+
+characters = [
+	'!', '"', '#', '&', "'", '(', ')', '*', '+', ',',
+	'-', '.', '/', '0', '1', '2', '3', '4', '5', '6',
+	'7', '8', '9', ':', ';', '?', 'A', 'B', 'C', 'D',
+	'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
+	'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+	'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+	'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+	's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+]

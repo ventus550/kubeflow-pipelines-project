@@ -2,36 +2,23 @@ import keras
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from typing import NamedTuple
+import random
 
 import io
 import base64
-from typing import Union
 from pathlib import Path
+from google.cloud import storage
 
 
-def save(model, path: Union[Path, str], metadata={}, frozen=False):
-    path = Path(path)
-    if frozen:
-        metadata["frozen"] = True
-        model = keras.models.Model(
-            inputs=model.input, outputs=model.output, name=model.name
-        )
-        model.trainable = False
-    weights = model.get_weights()
-    config = model.get_config()
-    config["name"] = {"name": config["name"], **metadata}
-    model = tf.keras.models.Model.from_config(config)
-    model.set_weights(weights)
-    model.save(path)
-    return model
-
-
-def load(path: Union[Path, str]):
-    path = Path(path)
-    model = keras.models.load_model(path)
-    model.meta = model.get_config()["name"]
-    model._name = path.name
-    return model
+def gsdownload(filename: str, gs_full_resource_uri: str = "gs://<bucket>/<resource>"):
+    storage_client = storage.Client()
+    separator = "/"
+    urisplit = gs_full_resource_uri.split(separator)
+    bucket = storage_client.bucket(urisplit[2])
+    resource = separator.join(urisplit[3:])
+    blob = bucket.blob(resource)
+    blob.download_to_filename(filename)
 
 
 def capture_image() -> str:
@@ -46,3 +33,27 @@ def capture_image() -> str:
     image_type = "png"
     dataurl = f'data:image/{image_type};base64,{image_base64_utf8_str}'
     return dataurl
+
+
+class Sample(NamedTuple):
+    image: np.ndarray
+    label: str
+    value: int
+    
+    def show(self, plot=plt):
+        add_title = getattr(plot, "set_title", getattr(plot, "title", None))
+        plot.imshow(self.image, cmap="gray")
+        add_title(self.label)
+        plot.axis("off")
+
+
+class SampleBatch(list):
+    def __init__(self, X: np.ndarray, Y: list[str], V: list[int]):
+        assert len(X) == len(Y) == len(V) >= 12
+        
+        super().__init__(Sample(*tup) for tup in zip(X, Y, V))
+    
+    def show(self):
+        _, subs = plt.subplots(3, 4, figsize=(15, 4))
+        for sample, subplot in zip(random.choices(self, k=12), subs.ravel()):
+            sample.show(subplot)

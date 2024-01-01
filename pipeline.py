@@ -52,7 +52,7 @@ def pipeline(
     
     train_model = train_model_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
     
-    components.visualize(model=train_model.outputs["oracle"])
+    components.metrics(dataset=data.outputs["test"], model=train_model.outputs["oracle"])
 
 
 # -
