@@ -3,6 +3,8 @@
 
 ### Custom ###
 data
+*.ipynb
+*.h5
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

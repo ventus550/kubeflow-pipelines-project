@@ -17,6 +17,31 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
+  comp-metrics:
+    executorLabel: exec-metrics
+    inputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        edit_distance_histogram:
+          artifactType:
+            schemaTitle: system.Markdown
+            schemaVersion: 0.0.1
+        predictions:
+          artifactType:
+            schemaTitle: system.Markdown
+            schemaVersion: 0.0.1
+      parameters:
+        Output:
+          parameterType: NUMBER_INTEGER
   comp-split-data:
     executorLabel: exec-split-data
     inputDefinitions:
@@ -198,20 +223,6 @@ components:
       parameters:
         gcp_resources:
           parameterType: STRING
-  comp-visualize:
-    executorLabel: exec-visualize
-    inputDefinitions:
-      artifacts:
-        model:
-          artifactType:
-            schemaTitle: system.Model
-            schemaVersion: 0.0.1
-    outputDefinitions:
-      artifacts:
-        plot:
-          artifactType:
-            schemaTitle: system.Markdown
-            schemaVersion: 0.0.1
 defaultPipelineRoot: gs://protocell/pipeline
 deploymentSpec:
   executors:
@@ -222,6 +233,48 @@ deploymentSpec:
         typeSchema:
           schemaTitle: system.Dataset
           schemaVersion: 0.0.1
+    exec-metrics:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - metrics
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'seaborn' &&\
+          \ \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef metrics(\n    dataset: Input[Dataset],\n    model: Input[Model],\n\
+          \    edit_distance_histogram: Output[Markdown],\n    predictions: Output[Markdown]\n\
+          ) -> int:                                                         \n\n \
+          \   from src import aitoolkit\n    from src.utils import capture_image\n\
+          \    import seaborn\n    import numpy\n\n    X, Y = numpy.load(dataset.path\
+          \ + \".npz\").values()\n    X, Y = aitoolkit.format_data(X, Y, aitoolkit.characters)\n\
+          \    model = aitoolkit.load(f\"{model.path}/model.h5\")\n    batch = aitoolkit.batch_prediction(model,\
+          \ X, Y)\n\n    edit_distance_values = numpy.array([sample.value for sample\
+          \ in batch])\n    seaborn.histplot(edit_distance_values, bins=10, kde=True,\
+          \ alpha=0.6)\n    open(edit_distance_histogram.path, 'w').write(f\"![Image]({capture_image()})\"\
+          )\n\n    batch.show()\n    batch.show()\n    open(predictions.path, 'w').write(f\"\
+          ![Image]({capture_image()})\")\n\n    average_edit_distance = numpy.mean(edit_distance_values)\n\
+          \    print(\"Average edit distance:\", average_edit_distance)\n    return\
+          \ int(average_edit_distance)\n\n"
+        image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
     exec-split-data:
       container:
         args:
@@ -283,39 +336,6 @@ deploymentSpec:
         - -m
         - google_cloud_pipeline_components.container.v1.custom_job.launcher
         image: gcr.io/ml-pipeline/google-cloud-pipeline-components:2.8.0
-    exec-visualize:
-      container:
-        args:
-        - --executor_input
-        - '{{$}}'
-        - --function_to_execute
-        - visualize
-        command:
-        - sh
-        - -c
-        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
-          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
-          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
-          $0\" \"$@\"\n"
-        - sh
-        - -ec
-        - 'program_path=$(mktemp -d)
-
-
-          printf "%s" "$0" > "$program_path/ephemeral_component.py"
-
-          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
-
-          '
-        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
-          \ *\n\ndef visualize(model: Input[Model], plot: Output[Markdown]):     \
-          \                                                    \n\n    print(f\"Visualizing!\"\
-          )\n\n    from src.utils import capture_image\n\n    import matplotlib.pyplot\
-          \ as plt\n    import numpy as np\n\n    plt.plot(np.arange(10))\n    img\
-          \ = capture_image()\n    with open(plot.path, 'w') as f:\n        f.write(f\"\
-          ![Image]({img})\")\n\n"
-        image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
 pipelineInfo:
   name: oracle
 root:
@@ -332,6 +352,26 @@ root:
               componentInputParameter: dataset
         taskInfo:
           name: importer
+      metrics:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-metrics
+        dependentTasks:
+        - split-data
+        - train-model
+        inputs:
+          artifacts:
+            dataset:
+              taskOutputArtifact:
+                outputArtifactKey: test
+                producerTask: split-data
+            model:
+              taskOutputArtifact:
+                outputArtifactKey: oracle
+                producerTask: train-model
+        taskInfo:
+          name: metrics
       split-data:
         cachingOptions:
           enableCache: true
@@ -372,21 +412,6 @@ root:
                 constant: europe-central2
         taskInfo:
           name: train-model
-      visualize:
-        cachingOptions:
-          enableCache: true
-        componentRef:
-          name: comp-visualize
-        dependentTasks:
-        - train-model
-        inputs:
-          artifacts:
-            model:
-              taskOutputArtifact:
-                outputArtifactKey: oracle
-                producerTask: train-model
-        taskInfo:
-          name: visualize
   inputDefinitions:
     artifacts:
       foo:

@@ -16,10 +16,10 @@ def metrics(
     
     X, Y = numpy.load(dataset.path + ".npz").values()
     X, Y = aitoolkit.format_data(X, Y, aitoolkit.characters)
-    model = aitoolkit.load(model.path)
+    model = aitoolkit.load(f"{model.path}/model.h5")
     batch = aitoolkit.batch_prediction(model, X, Y)
     
-    edit_distance_values = np.array([sample.value for sample in batch])
+    edit_distance_values = numpy.array([sample.value for sample in batch])
     seaborn.histplot(edit_distance_values, bins=10, kde=True, alpha=0.6)
     open(edit_distance_histogram.path, 'w').write(f"![Image]({capture_image()})")
     
@@ -27,6 +27,6 @@ def metrics(
     batch.show()
     open(predictions.path, 'w').write(f"![Image]({capture_image()})")
     
-    average_edit_distance = np.mean(edit_distance_values)
+    average_edit_distance = numpy.mean(edit_distance_values)
     print("Average edit distance:", average_edit_distance)
-    return average_edit_distance
+    return int(average_edit_distance)
