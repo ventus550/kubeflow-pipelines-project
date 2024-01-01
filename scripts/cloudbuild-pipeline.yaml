@@ -10,3 +10,6 @@ steps:
   - name: python:3.10
     entrypoint: python
     args: ["pipeline.py"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY

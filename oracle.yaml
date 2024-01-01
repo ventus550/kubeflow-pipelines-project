@@ -132,22 +132,24 @@ components:
                 \ oracle: Output[Model]):\n    import numpy\n    import keras\n  \
                 \  import os\n\n    from keras.layers import (\n        Conv2D,\n\
                 \        BatchNormalization,\n        MaxPooling2D,\n        Dropout,\n\
-                \        Flatten,\n        Dense\n    )\n    from keras import callbacks\n\
-                \    import tensorflow as tf\n    from src import aitoolkit\n\n  \
-                \  image_width = 128\n    image_height = 32\n\n    # Character codes\n\
-                \    characters = [\n        '!', '\"', '#', '&', \"'\", '(', ')',\
-                \ '*', '+', ',',\n        '-', '.', '/', '0', '1', '2', '3', '4',\
-                \ '5', '6',\n        '7', '8', '9', ':', ';', '?', 'A', 'B', 'C',\
-                \ 'D',\n        'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',\n\
-                \        'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',\n     \
-                \   'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',\n        'i',\
-                \ 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',\n        's', 't',\
-                \ 'u', 'v', 'w', 'x', 'y', 'z'\n    ]\n\n    X, Y = numpy.load(dataset.path\
-                \ + \".npz\").values()\n    maxlen = len(max(Y, key=len))\n    X,\
-                \ Y = aitoolkit.format_data(X, Y, characters, maxlen)\n    X_test,\
-                \ Y_test\t = X[:1000], Y[:1000]\n    X_train, Y_train = X[1000:],\
-                \ Y[1000:]\n\n\n    tensorboard = callbacks.TensorBoard(\n       \
-                \ # vertex-provided directory for logs\n        log_dir = os.environ['AIP_TENSORBOARD_LOG_DIR'],\n\
+                \        Flatten,\n        Dense,\n        Activation,\n        Permute,\n\
+                \        Reshape,\n        Bidirectional,\n        LSTM\n    )\n \
+                \   from keras import callbacks\n    import tensorflow as tf\n   \
+                \ from src import aitoolkit\n\n    image_width = 128\n    image_height\
+                \ = 32\n\n    # Character codes\n    characters = [\n        '!',\
+                \ '\"', '#', '&', \"'\", '(', ')', '*', '+', ',',\n        '-', '.',\
+                \ '/', '0', '1', '2', '3', '4', '5', '6',\n        '7', '8', '9',\
+                \ ':', ';', '?', 'A', 'B', 'C', 'D',\n        'E', 'F', 'G', 'H',\
+                \ 'I', 'J', 'K', 'L', 'M', 'N',\n        'O', 'P', 'Q', 'R', 'S',\
+                \ 'T', 'U', 'V', 'W', 'X',\n        'Y', 'Z', 'a', 'b', 'c', 'd',\
+                \ 'e', 'f', 'g', 'h',\n        'i', 'j', 'k', 'l', 'm', 'n', 'o',\
+                \ 'p', 'q', 'r',\n        's', 't', 'u', 'v', 'w', 'x', 'y', 'z'\n\
+                \    ]\n\n    X, Y = numpy.load(dataset.path + \".npz\").values()\n\
+                \    maxlen = len(max(Y, key=len))\n    X, Y = aitoolkit.format_data(X,\
+                \ Y, characters, maxlen)\n    X_test, Y_test\t = X[:1000], Y[:1000]\n\
+                \    X_train, Y_train = X[1000:2000], Y[1000:2000] #todo\n\n\n   \
+                \ tensorboard = callbacks.TensorBoard(\n        # vertex-provided\
+                \ directory for logs\n        log_dir = os.environ['AIP_TENSORBOARD_LOG_DIR'],\n\
                 \        histogram_freq=1\n    )\n    checkpoints = callbacks.ModelCheckpoint(\n\
                 \        monitor='edit_distance',\n        filepath='./weights.h5',\n\
                 \        save_weights_only=True,\n        save_best_only=True,\n \
