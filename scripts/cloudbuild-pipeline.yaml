@@ -1,0 +1,12 @@
+steps:
+  - name: python:3.10
+    entrypoint: python
+    args: ["-m", "pip", "install", "--upgrade", "pip"]
+
+  - name: python:3.10
+    entrypoint: pip
+    args: ["install", "-r", "requirements.txt", "--user"]
+
+  - name: python:3.10
+    entrypoint: python
+    args: ["pipeline.py"]
