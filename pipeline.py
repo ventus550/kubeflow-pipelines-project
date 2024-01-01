@@ -29,7 +29,7 @@ tensorboard = aiplatform.Tensorboard(
     name=configs.model,
 )
 def pipeline(
-    dataset: str = f"{configs.data_directory}/classification.npz",
+    dataset: str = f"{configs.data_directory}/words.npz",
     epochs: int = 10,
     foo: Input[Dataset] = None
 ):
@@ -42,17 +42,17 @@ def pipeline(
     
     data = components.split_data(ratio=0.1, dataset=importer.output)
     
-    train_classifier_op = custom_job.create_custom_training_job_op_from_component(
-        component_spec = components.train_classifier,
+    train_model_op = custom_job.create_custom_training_job_op_from_component(
+        component_spec = components.train_model,
         display_name = configs.model,
         tensorboard = tensorboard.resource_name,
         base_output_directory = configs.pipeline_directory,
         service_account = configs.service_account
     )
     
-    train_classifier = train_classifier_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
+    train_model = train_model_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
     
-    components.visualize(model=train_classifier.outputs["classifier"])
+    components.visualize(model=train_model.outputs["oracle"])
 
 
 # -
