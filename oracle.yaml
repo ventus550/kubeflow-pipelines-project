@@ -42,6 +42,29 @@ components:
       parameters:
         Output:
           parameterType: NUMBER_INTEGER
+  comp-shap-explainer:
+    executorLabel: exec-shap-explainer
+    inputDefinitions:
+      artifacts:
+        dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        cols:
+          parameterType: NUMBER_INTEGER
+        rows:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        explanation:
+          artifactType:
+            schemaTitle: system.Markdown
+            schemaVersion: 0.0.1
   comp-split-data:
     executorLabel: exec-split-data
     inputDefinitions:
@@ -270,10 +293,57 @@ deploymentSpec:
           \ X, Y)\n\n    edit_distance_values = numpy.array([sample.value for sample\
           \ in batch])\n    seaborn.histplot(edit_distance_values, bins=10, kde=True,\
           \ alpha=0.6)\n    open(edit_distance_histogram.path, 'w').write(f\"![Image]({capture_image()})\"\
-          )\n\n    batch.show()\n    batch.show()\n    open(predictions.path, 'w').write(f\"\
-          ![Image]({capture_image()})\")\n\n    average_edit_distance = numpy.mean(edit_distance_values)\n\
-          \    print(\"Average edit distance:\", average_edit_distance)\n    return\
-          \ int(average_edit_distance)\n\n"
+          )\n\n    batch.show()\n    open(predictions.path, 'w').write(f\"![Image]({capture_image()})\"\
+          )\n\n    average_edit_distance = numpy.mean(edit_distance_values)\n    print(\"\
+          Average edit distance:\", average_edit_distance)\n    return int(average_edit_distance)\n\
+          \n"
+        image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
+    exec-shap-explainer:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - shap_explainer
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'shap==0.44'\
+          \ && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef shap_explainer(\n    rows: int,\n    cols: int,\n    dataset:\
+          \ Input[Dataset],\n    model: Input[Model],\n    explanation: Output[Markdown]\n\
+          ):                                                         \n    import\
+          \ shap\n    import numpy\n    import keras\n    import tensorflow as tf\n\
+          \n    from src import aitoolkit\n    from src.utils import capture_image\n\
+          \n    characters = aitoolkit.characters\n    X, Y = numpy.load(dataset.path\
+          \ + \".npz\").values()\n    X, Y = aitoolkit.format_data(X, Y, characters)\n\
+          \    model = aitoolkit.load(f\"{model.path}/model.h5\")\n\n    # repurpose\
+          \ model for \"classification\"\n    classifier = keras.models.Model(model.input,\
+          \ tf.reduce_max(model.output, axis=1)[:, :len(characters)])\n\n    masker\
+          \ = shap.maskers.Image(\"inpaint_telea\", X[0].shape)\n    explainer = shap.Explainer(classifier,\
+          \ masker, output_names=list(characters))\n    indices = numpy.random.randint(len(X),\
+          \ size=rows)\n    shap_values = explainer(X[indices], max_evals=100, batch_size=1000,\
+          \ outputs=shap.Explanation.argsort.flip[:cols])\n\n    labels = shap_values.output_names\n\
+          \    if len(numpy.shape(shap_values.output_names)) == 1:\n        # shap\
+          \ is an awful library and thus requires awful fixes\n        labels = numpy.reshape(labels\
+          \ * rows, (rows, cols))\n\n    shap.image_plot(shap_values, labels=labels)\n\
+          \    open(explanation.path, 'w').write(f\"![Image]({capture_image()})\"\
+          )\n\n"
         image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
     exec-split-data:
       container:
@@ -372,6 +442,33 @@ root:
                 producerTask: train-model
         taskInfo:
           name: metrics
+      shap-explainer:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-shap-explainer
+        dependentTasks:
+        - split-data
+        - train-model
+        inputs:
+          artifacts:
+            dataset:
+              taskOutputArtifact:
+                outputArtifactKey: test
+                producerTask: split-data
+            model:
+              taskOutputArtifact:
+                outputArtifactKey: oracle
+                producerTask: train-model
+          parameters:
+            cols:
+              runtimeValue:
+                constant: 5.0
+            rows:
+              runtimeValue:
+                constant: 4.0
+        taskInfo:
+          name: shap-explainer
       split-data:
         cachingOptions:
           enableCache: true

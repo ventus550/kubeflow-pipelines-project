@@ -24,7 +24,6 @@ def metrics(
     open(edit_distance_histogram.path, 'w').write(f"![Image]({capture_image()})")
     
     batch.show()
-    batch.show()
     open(predictions.path, 'w').write(f"![Image]({capture_image()})")
     
     average_edit_distance = numpy.mean(edit_distance_values)
