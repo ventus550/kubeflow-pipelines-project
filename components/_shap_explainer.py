@@ -1,7 +1,7 @@
 from kfp.dsl import component, Dataset, Input, Output, Model, Markdown
 from src.secrets import configs
 
-@component(base_image=configs.keras_image, packages_to_install=["shap==0.44", "opencv-python"])
+@component(base_image=configs.keras_image, packages_to_install=["shap==0.44"])
 def shap_explainer(
     rows: int,
     cols: int,
@@ -9,6 +9,7 @@ def shap_explainer(
     model: Input[Model],
     explanation: Output[Markdown]
 ):                                                         
+    import cv2
     import shap
     import numpy
     import keras

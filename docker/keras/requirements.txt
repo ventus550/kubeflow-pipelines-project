@@ -2,5 +2,7 @@ numpy
 scipy
 matplotlib
 google-cloud-storage
+opencv-python-headless
+opencv-contrib-python-headless
 tensorflow==2.15.0
 keras==2.15.0

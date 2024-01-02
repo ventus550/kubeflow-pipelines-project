@@ -30,3 +30,6 @@ availableSecrets:
   secretManager:
   - versionName: "projects/protocell-404013/secrets/protocell-config/versions/latest"
     env: 'CONFIGS'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

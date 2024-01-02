@@ -328,8 +328,8 @@ deploymentSpec:
           \ *\n\ndef shap_explainer(\n    rows: int,\n    cols: int,\n    dataset:\
           \ Input[Dataset],\n    model: Input[Model],\n    explanation: Output[Markdown]\n\
           ):                                                         \n    import\
-          \ shap\n    import numpy\n    import keras\n    import tensorflow as tf\n\
-          \n    from src import aitoolkit\n    from src.utils import capture_image\n\
+          \ cv2\n    import shap\n    import numpy\n    import keras\n    import tensorflow\
+          \ as tf\n\n    from src import aitoolkit\n    from src.utils import capture_image\n\
           \n    characters = aitoolkit.characters\n    X, Y = numpy.load(dataset.path\
           \ + \".npz\").values()\n    X, Y = aitoolkit.format_data(X, Y, characters)\n\
           \    model = aitoolkit.load(f\"{model.path}/model.h5\")\n\n    # repurpose\
