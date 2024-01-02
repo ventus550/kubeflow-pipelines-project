@@ -25,12 +25,12 @@ def capture_image() -> str:
     image = plt.gcf()
     buf = io.BytesIO()
     # save image to memory
-    image.savefig(buf, format='png', bbox_inches="tight")
+    image.savefig(buf, format="png", bbox_inches="tight")
     binary_image = buf.getvalue()
 
-    image_base64_utf8_str = base64.b64encode(binary_image).decode('utf-8')
+    image_base64_utf8_str = base64.b64encode(binary_image).decode("utf-8")
     image_type = "png"
-    dataurl = f'data:image/{image_type};base64,{image_base64_utf8_str}'
+    dataurl = f"data:image/{image_type};base64,{image_base64_utf8_str}"
     return dataurl
 
 
@@ -38,7 +38,7 @@ class Sample(NamedTuple):
     image: np.ndarray
     label: str
     value: int
-    
+
     def show(self, plot=plt):
         add_title = getattr(plot, "set_title", getattr(plot, "title", None))
         plot.imshow(self.image, cmap="gray")
@@ -49,9 +49,9 @@ class Sample(NamedTuple):
 class SampleBatch(list):
     def __init__(self, X: np.ndarray, Y: list[str], V: list[int]):
         assert len(X) == len(Y) == len(V) >= 12
-        
+
         super().__init__(Sample(*tup) for tup in zip(X, Y, V))
-    
+
     def show(self):
         _, subs = plt.subplots(3, 4, figsize=(15, 4))
         for sample, subplot in zip(random.choices(self, k=12), subs.ravel()):
