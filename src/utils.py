@@ -1,13 +1,12 @@
+import io
+import base64
+import random
 import keras
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from typing import NamedTuple
-import random
-
-import io
-import base64
 from pathlib import Path
+from typing import NamedTuple
 from google.cloud import storage
 
 

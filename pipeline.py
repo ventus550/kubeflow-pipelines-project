@@ -1,11 +1,12 @@
 # +
+from typing import NamedTuple
 from google.cloud import aiplatform
 from kfp.registry import RegistryClient
 from kfp import compiler, dsl
 from kfp.dsl import (
     Artifact, Dataset, Input, InputPath,
     Model, Output, OutputPath, component,
-    ParallelFor, If
+    ParallelFor, If, Else, OneOf, Condition
 )
 
 import google_cloud_pipeline_components.v1.custom_job.utils as custom_job
@@ -13,16 +14,31 @@ import components
 from src.secrets import configs
 # -
 
+# ## Static Configuration
+
+TENSORBOARD_ID = "2373397003624251392"
+ACCELERATOR_TYPE = "NVIDIA_TESLA_T4"
+TRAIN_LOCATION = configs.location
+
 # ## Pipeline definition
 
 # +
-TENSORBOARD_ID = "2373397003624251392"
-
 tensorboard = aiplatform.Tensorboard(
-    location=configs.location,
+    location=TRAIN_LOCATION,
     project=configs.project,
     tensorboard_name = TENSORBOARD_ID
 )
+
+training_config = dict(
+    component_spec = components.train_model,
+    display_name = configs.model,
+    tensorboard = tensorboard.resource_name,
+    base_output_directory = configs.pipeline_directory,
+    service_account = configs.service_account
+)
+
+gpu = dict(accelerator_type = ACCELERATOR_TYPE)
+
 
 @dsl.pipeline(
     pipeline_root=configs.pipeline_directory,
@@ -31,11 +47,11 @@ tensorboard = aiplatform.Tensorboard(
 def pipeline(
     dataset: str = f"{configs.data_directory}/words.npz",
     epochs: int = 10,
-    upload: bool = True,
+    upload: bool = False,
     upload_threshold: float = 0.0,
-    foo: Input[Dataset] = None
+    accelerator: bool = False,
+    pretrained_model: Input[Model] = None
 ):
-    
     importer = dsl.importer(
         artifact_uri=dataset,
         artifact_class=Dataset,
@@ -46,23 +62,23 @@ def pipeline(
     train = data.outputs["train"]
     test = data.outputs["test"]
     
-    train_model_op = custom_job.create_custom_training_job_op_from_component(
-        component_spec = components.train_model,
-        display_name = configs.model,
-        tensorboard = tensorboard.resource_name,
-        base_output_directory = configs.pipeline_directory,
-        service_account = configs.service_account
-    )
+    train_model_gpu_op = custom_job.create_custom_training_job_op_from_component(**(training_config | gpu))
+    train_model_cpu_op = custom_job.create_custom_training_job_op_from_component(**training_config)
     
-    train_model = train_model_op(epochs=epochs, dataset=train, location = configs.location)
-    model = train_model.outputs["trained_model"]
+    def branch(train_model_op):
+        # replace with OneOf once https://github.com/kubeflow/pipelines/issues/10271 is resolved
+        model = train_model_op.outputs["trained_model"]
+        components.shap_explainer(rows=4, cols=5, dataset=test, model=model)
+        metric = components.metrics(dataset=test, model=model).outputs["Output"]
+        with If(upload and metric > upload_threshold, name="metric > threshold"):
+            components.upload_model(model=model)
     
-    components.shap_explainer(rows=4, cols=5, dataset=test, model=model)
-    
-    metric = components.metrics(dataset=test, model=model).outputs["Output"]
-
-    with If(upload and metric > upload_threshold, name="metric > threshold"):
-        components.upload_model(model=model)
+    with If(accelerator == True, name="gpu"):
+        train_model_gpu = train_model_gpu_op(epochs=epochs, dataset=train, location = TRAIN_LOCATION)
+        branch(train_model_gpu)
+    with Else(name="cpu"):
+        train_model_cpu = train_model_cpu_op(epochs=epochs, dataset=train, location = TRAIN_LOCATION)
+        branch(train_model_cpu)
 
 
 # -

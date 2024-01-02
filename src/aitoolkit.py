@@ -1,9 +1,9 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from pathlib import Path
 from itertools import groupby
 from src.utils import SampleBatch
-import numpy as np
 
 
 def save(model, path: Path | str, metadata={}, frozen=False):
