@@ -1,8 +1,8 @@
 from kfp.dsl import component, Dataset, Input, Output, Model
 from src.secrets import configs
 
-@component(base_image=configs.keras_image)
-def train_model(epochs: int, dataset: Input[Dataset], oracle: Output[Model]):
+@component(base_image=configs.keras_image, packages_to_install=["google-cloud-secret-manager>=2.17.0"])
+def train_model(epochs: int, dataset: Input[Dataset], trained_model: Output[Model]):
     import numpy
     import keras
     import os
@@ -22,28 +22,17 @@ def train_model(epochs: int, dataset: Input[Dataset], oracle: Output[Model]):
     )
     from keras import callbacks
     import tensorflow as tf
+    from contextlib import suppress
     from src import aitoolkit
-
+    from src.secrets import configs
+    
     image_width = 128
     image_height = 32
-    
-    # Character codes
-    characters = [
-        '!', '"', '#', '&', "'", '(', ')', '*', '+', ',',
-        '-', '.', '/', '0', '1', '2', '3', '4', '5', '6',
-        '7', '8', '9', ':', ';', '?', 'A', 'B', 'C', 'D',
-        'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
-        'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-        'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
-        'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
-        's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
-    ]
 
     X, Y = numpy.load(dataset.path + ".npz").values()
-    maxlen = len(max(Y, key=len))
-    X, Y = aitoolkit.format_data(X, Y, characters, maxlen)
+    X, Y = aitoolkit.format_data(X, Y,aitoolkit. characters)
     X_test, Y_test	 = X[:1000], Y[:1000]
-    X_train, Y_train = X[1000:2000], Y[1000:2000] #todo
+    X_train, Y_train = X[1000:], Y[1000:]
     
     
     tensorboard = callbacks.TensorBoard(
@@ -94,14 +83,13 @@ def train_model(epochs: int, dataset: Input[Dataset], oracle: Output[Model]):
         x = Bidirectional( LSTM(64,  return_sequences=True, dropout=0.25) )(x)
 
         # Reserve two extra tokens for the ctc_loss
-        x = Dense(len(characters) + 2, activation="softmax", name="predictions")(x)
+        x = Dense(len(aitoolkit.characters) + 2, activation="softmax", name="predictions")(x)
 
-        model = keras.models.Model(inputs=input, outputs=x, name="oracle")
+        model = keras.models.Model(inputs=input, outputs=x, name=configs.model)
         model.compile(optimizer="adam", loss=aitoolkit.ctc_loss, metrics=[aitoolkit.edit_distance])
         return model
     
     model = build_model()
-    print("Parameter count:", model.count_params())
     model.summary()
 
 
@@ -112,5 +100,16 @@ def train_model(epochs: int, dataset: Input[Dataset], oracle: Output[Model]):
         callbacks = [tensorboard, checkpoints, plateau]
     )
 
-    # aitoolkit.save(model, oracle.path)
-    model.save(f"{oracle.path}.keras")
+    # load from last checkpoint
+    with suppress(FileNotFoundError):
+        model.load_weights("weights.h5")
+    
+    
+    meta = {
+        "epochs": epochs,
+        "characters": "".join(aitoolkit.characters),
+        "padded": -1,
+        "parameters": model.count_params()
+    }
+    
+    aitoolkit.save(model, trained_model.path, metadata=meta)

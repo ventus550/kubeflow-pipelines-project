@@ -55,7 +55,7 @@ def pipeline(
     )
     
     train_model = train_model_op(epochs=epochs, dataset=train, location = configs.location)
-    model = train_model.outputs["oracle"]
+    model = train_model.outputs["trained_model"]
     
     components.shap_explainer(rows=4, cols=5, dataset=test, model=model)
     

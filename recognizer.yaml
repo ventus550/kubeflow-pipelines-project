@@ -1,5 +1,5 @@
 # PIPELINE DEFINITION
-# Name: oracle
+# Name: recognizer
 # Inputs:
 #    dataset: str [Default: 'gs://protocell/data/words.npz']
 #    epochs: int [Default: 10.0]
@@ -18,12 +18,12 @@ components:
           inputs:
             artifacts:
               model:
-                componentInputArtifact: pipelinechannel--train-model-oracle
+                componentInputArtifact: pipelinechannel--train-model-trained_model
           taskInfo:
             name: upload-model
     inputDefinitions:
       artifacts:
-        pipelinechannel--train-model-oracle:
+        pipelinechannel--train-model-trained_model:
           artifactType:
             schemaTitle: system.Model
             schemaVersion: 0.0.1
@@ -127,7 +127,7 @@ components:
           isOptional: true
           parameterType: STRING
         display_name:
-          defaultValue: oracle
+          defaultValue: recognizer
           isOptional: true
           parameterType: STRING
         enable_web_access:
@@ -191,7 +191,8 @@ components:
                 \ || python3 -m ensurepip --user || apt-get install python3-pip\n\
                 fi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet\
                 \ --no-warn-script-location 'kfp==2.4.0' '--no-deps' 'typing-extensions>=3.7.4,<5;\
-                \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+                \ python_version<\"3.9\"'  &&  python3 -m pip install --quiet --no-warn-script-location\
+                \ 'google-cloud-secret-manager>=2.17.0' && \"$0\" \"$@\"\n"
               - sh
               - -ec
               - 'program_path=$(mktemp -d)
@@ -204,27 +205,19 @@ components:
                 '
               - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing\
                 \ import *\n\ndef train_model(epochs: int, dataset: Input[Dataset],\
-                \ oracle: Output[Model]):\n    import numpy\n    import keras\n  \
-                \  import os\n\n    from keras.layers import (\n        Conv2D,\n\
+                \ trained_model: Output[Model]):\n    import numpy\n    import keras\n\
+                \    import os\n\n    from keras.layers import (\n        Conv2D,\n\
                 \        BatchNormalization,\n        MaxPooling2D,\n        Dropout,\n\
                 \        Flatten,\n        Dense,\n        Activation,\n        Permute,\n\
                 \        Reshape,\n        Bidirectional,\n        LSTM\n    )\n \
                 \   from keras import callbacks\n    import tensorflow as tf\n   \
-                \ from src import aitoolkit\n\n    image_width = 128\n    image_height\
-                \ = 32\n\n    # Character codes\n    characters = [\n        '!',\
-                \ '\"', '#', '&', \"'\", '(', ')', '*', '+', ',',\n        '-', '.',\
-                \ '/', '0', '1', '2', '3', '4', '5', '6',\n        '7', '8', '9',\
-                \ ':', ';', '?', 'A', 'B', 'C', 'D',\n        'E', 'F', 'G', 'H',\
-                \ 'I', 'J', 'K', 'L', 'M', 'N',\n        'O', 'P', 'Q', 'R', 'S',\
-                \ 'T', 'U', 'V', 'W', 'X',\n        'Y', 'Z', 'a', 'b', 'c', 'd',\
-                \ 'e', 'f', 'g', 'h',\n        'i', 'j', 'k', 'l', 'm', 'n', 'o',\
-                \ 'p', 'q', 'r',\n        's', 't', 'u', 'v', 'w', 'x', 'y', 'z'\n\
-                \    ]\n\n    X, Y = numpy.load(dataset.path + \".npz\").values()\n\
-                \    maxlen = len(max(Y, key=len))\n    X, Y = aitoolkit.format_data(X,\
-                \ Y, characters, maxlen)\n    X_test, Y_test\t = X[:1000], Y[:1000]\n\
-                \    X_train, Y_train = X[1000:2000], Y[1000:2000] #todo\n\n\n   \
-                \ tensorboard = callbacks.TensorBoard(\n        # vertex-provided\
-                \ directory for logs\n        log_dir = os.environ['AIP_TENSORBOARD_LOG_DIR'],\n\
+                \ from contextlib import suppress\n    from src import aitoolkit\n\
+                \    from src.secrets import configs\n\n    image_width = 128\n  \
+                \  image_height = 32\n\n    X, Y = numpy.load(dataset.path + \".npz\"\
+                ).values()\n    X, Y = aitoolkit.format_data(X, Y,aitoolkit. characters)\n\
+                \    X_test, Y_test\t = X[:1000], Y[:1000]\n    X_train, Y_train =\
+                \ X[1000:], Y[1000:]\n\n\n    tensorboard = callbacks.TensorBoard(\n\
+                \        # vertex-provided directory for logs\n        log_dir = os.environ['AIP_TENSORBOARD_LOG_DIR'],\n\
                 \        histogram_freq=1\n    )\n    checkpoints = callbacks.ModelCheckpoint(\n\
                 \        monitor='edit_distance',\n        filepath='./weights.h5',\n\
                 \        save_weights_only=True,\n        save_best_only=True,\n \
@@ -244,16 +237,19 @@ components:
                 \n        x = Bidirectional( LSTM(128, return_sequences=True, dropout=0.25)\
                 \ )(x)\n        x = Bidirectional( LSTM(64,  return_sequences=True,\
                 \ dropout=0.25) )(x)\n\n        # Reserve two extra tokens for the\
-                \ ctc_loss\n        x = Dense(len(characters) + 2, activation=\"softmax\"\
-                , name=\"predictions\")(x)\n\n        model = keras.models.Model(inputs=input,\
-                \ outputs=x, name=\"oracle\")\n        model.compile(optimizer=\"\
+                \ ctc_loss\n        x = Dense(len(aitoolkit.characters) + 2, activation=\"\
+                softmax\", name=\"predictions\")(x)\n\n        model = keras.models.Model(inputs=input,\
+                \ outputs=x, name=configs.model)\n        model.compile(optimizer=\"\
                 adam\", loss=aitoolkit.ctc_loss, metrics=[aitoolkit.edit_distance])\n\
-                \        return model\n\n    model = build_model()\n    print(\"Parameter\
-                \ count:\", model.count_params())\n    model.summary()\n\n\n    model.fit(\n\
-                \        X_train, Y_train,\n        validation_split = 0.1,\n    \
-                \    epochs = epochs,\n        callbacks = [tensorboard, checkpoints,\
-                \ plateau]\n    )\n\n    # aitoolkit.save(model, oracle.path)\n  \
-                \  model.save(f\"{oracle.path}.keras\")\n\n"
+                \        return model\n\n    model = build_model()\n    model.summary()\n\
+                \n\n    model.fit(\n        X_train, Y_train,\n        validation_split\
+                \ = 0.1,\n        epochs = epochs,\n        callbacks = [tensorboard,\
+                \ checkpoints, plateau]\n    )\n\n    # load from last checkpoint\n\
+                \    with suppress(FileNotFoundError):\n        model.load_weights(\"\
+                weights.h5\")\n\n\n    meta = {\n        \"epochs\": epochs,\n   \
+                \     \"characters\": \"\".join(aitoolkit.characters),\n        \"\
+                padded\": -1,\n        \"parameters\": model.count_params()\n    }\n\
+                \n    aitoolkit.save(model, oracle.path, metadata=meta)\n\n"
               env: []
               image_uri: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
             disk_spec:
@@ -266,7 +262,7 @@ components:
           parameterType: LIST
     outputDefinitions:
       artifacts:
-        oracle:
+        trained_model:
           artifactType:
             schemaTitle: system.Model
             schemaVersion: 0.0.1
@@ -458,8 +454,9 @@ deploymentSpec:
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
           \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
-          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
-          $0\" \"$@\"\n"
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'google-cloud-secret-manager>=2.17.0'\
+          \ && \"$0\" \"$@\"\n"
         - sh
         - -ec
         - 'program_path=$(mktemp -d)
@@ -473,16 +470,18 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef upload_model(\n    model: Input[Model],\n    container_image:\
           \ str = \"europe-docker.pkg.dev/vertex-ai-restricted/prediction/tf_opt-cpu.2-15:latest\"\
-          \n):                                                         \n    from\
-          \ google.cloud import aiplatform\n    from src import aitoolkit\n    from\
-          \ src.secrets import configs\n\n    model = aitoolkit.load(model.path)\n\
-          \    model.save(model.path, save_format=\"tf\")\n\n    print(\"uploading\
-          \ to model registry\")\n    model = aiplatform.Model.upload(\n        display_name=configs.model,\n\
-          \        artifact_uri=model.path,\n        serving_container_image_uri=container_image\n\
-          \    )\n\n"
+          \n):                                                         \n    import\
+          \ keras\n    from google.cloud import aiplatform\n    from src.secrets import\
+          \ configs\n    from src import aitoolkit\n\n    path = model.path\n    model\
+          \ = aitoolkit.load(path)\n    model = keras.Model(model.input, model.output)\n\
+          \    model.save(path, save_format=\"tf\")\n\n    print(\"uploading to model\
+          \ registry\")\n    model = aiplatform.Model.upload(\n        display_name=configs.model,\n\
+          \        artifact_uri=path,\n        serving_container_image_uri=container_image,\n\
+          \        location=configs.location,\n        project=configs.project,\n\
+          \        staging_bucket=configs.bucket\n    )\n\n"
         image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
 pipelineInfo:
-  name: oracle
+  name: recognizer
 root:
   dag:
     tasks:
@@ -494,9 +493,9 @@ root:
         - train-model
         inputs:
           artifacts:
-            pipelinechannel--train-model-oracle:
+            pipelinechannel--train-model-trained_model:
               taskOutputArtifact:
-                outputArtifactKey: oracle
+                outputArtifactKey: trained_model
                 producerTask: train-model
           parameters:
             pipelinechannel--metrics-Output:
@@ -537,7 +536,7 @@ root:
                 producerTask: split-data
             model:
               taskOutputArtifact:
-                outputArtifactKey: oracle
+                outputArtifactKey: trained_model
                 producerTask: train-model
         taskInfo:
           name: metrics
@@ -557,7 +556,7 @@ root:
                 producerTask: split-data
             model:
               taskOutputArtifact:
-                outputArtifactKey: oracle
+                outputArtifactKey: trained_model
                 producerTask: train-model
           parameters:
             cols:
