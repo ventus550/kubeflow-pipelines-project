@@ -21,7 +21,7 @@ def shap_explainer(
     characters = aitoolkit.characters
     X, Y = numpy.load(dataset.path + ".npz").values()
     X, Y = aitoolkit.format_data(X, Y, characters)
-    model = aitoolkit.load(f"{model.path}/model.h5")
+    model = aitoolkit.load(model.path)
     
     # repurpose model for "classification"
     classifier = keras.models.Model(model.input, tf.reduce_max(model.output, axis=1)[:, :len(characters)])

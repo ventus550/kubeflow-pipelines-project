@@ -7,7 +7,7 @@ import numpy as np
 
 
 def save(model, path: Path | str, metadata={}, frozen=False):
-    path = Path(path)
+    path = Path(path) / "model.h5"
     if frozen:
         metadata["frozen"] = True
         model = keras.models.Model(
@@ -24,7 +24,7 @@ def save(model, path: Path | str, metadata={}, frozen=False):
 
 
 def load(path: Path | str):
-    path = Path(path)
+    path = Path(path) / "model.h5"
     model = keras.models.load_model(path)
     model.meta = model.get_config()["name"]
     model._name = path.name

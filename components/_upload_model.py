@@ -1,31 +1,22 @@
 from kfp.dsl import component, Dataset, Input, Output, Model, Markdown
 from src.secrets import configs
 
-@component(base_image=configs.keras_image, packages_to_install=["seaborn"])
-def metrics(
-    dataset: Input[Dataset],
+@component(base_image=configs.keras_image)
+def upload_model(
     model: Input[Model],
-    edit_distance_histogram: Output[Markdown],
-    predictions: Output[Markdown]
-) -> int:                                                         
-    
+    container_image: str = "europe-docker.pkg.dev/vertex-ai-restricted/prediction/tf_opt-cpu.2-15:latest"
+):                                                         
+    from google.cloud import aiplatform
     from src import aitoolkit
-    from src.utils import capture_image
-    import seaborn
-    import numpy
+    from src.secrets import configs
     
-    X, Y = numpy.load(dataset.path + ".npz").values()
-    X, Y = aitoolkit.format_data(X, Y, aitoolkit.characters)
-    model = aitoolkit.load(f"{model.path}/model.h5")
-    batch = aitoolkit.batch_prediction(model, X, Y)
-    
-    edit_distance_values = numpy.array([sample.value for sample in batch])
-    seaborn.histplot(edit_distance_values, bins=10, kde=True, alpha=0.6)
-    open(edit_distance_histogram.path, 'w').write(f"![Image]({capture_image()})")
-    
-    batch.show()
-    open(predictions.path, 'w').write(f"![Image]({capture_image()})")
-    
-    average_edit_distance = numpy.mean(edit_distance_values)
-    print("Average edit distance:", average_edit_distance)
-    return int(average_edit_distance)
+    model = aitoolkit.load(model.path)
+    model.save(model.path, save_format="tf")
+
+    print("uploading to model registry")
+    model = aiplatform.Model.upload(
+        display_name=configs.model,
+        artifact_uri=model.path,
+        serving_container_image_uri=container_image
+    )
+

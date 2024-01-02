@@ -112,4 +112,5 @@ def train_model(epochs: int, dataset: Input[Dataset], oracle: Output[Model]):
         callbacks = [tensorboard, checkpoints, plateau]
     )
 
-    aitoolkit.save(model, f"{oracle.path}/model.h5", frozen = True)
+    # aitoolkit.save(model, oracle.path)
+    model.save(f"{oracle.path}.keras")

@@ -9,17 +9,9 @@ steps:
     - |
       apt-get install -qq jq -y &&
       source scripts/json2env.sh "$${CONFIGS}" &&
-      docker tag ${_IMAGE} ${location}-docker.pkg.dev/${project}/${dockfactory}/${_IMAGE}:${_IMAGE_TAG}
-    secretEnv: ['CONFIGS']
-
-  - name: gcr.io/cloud-builders/docker
-    entrypoint: bash
-    args:
-    - -c
-    - |
-      apt-get install -qq jq -y &&
-      source scripts/json2env.sh "$${CONFIGS}" &&
-      docker push ${location}-docker.pkg.dev/${project}/${dockfactory}/${_IMAGE}:${_IMAGE_TAG}
+      export dockerimage=${location}-docker.pkg.dev/${project}/${dockfactory}/${_IMAGE}:${_IMAGE_TAG} &&
+      docker tag ${_IMAGE} ${dockerimage} &&
+      docker push ${dockerimage}
     secretEnv: ['CONFIGS']
 
 substitutions:

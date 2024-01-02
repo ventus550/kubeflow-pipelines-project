@@ -31,6 +31,8 @@ tensorboard = aiplatform.Tensorboard(
 def pipeline(
     dataset: str = f"{configs.data_directory}/words.npz",
     epochs: int = 10,
+    upload: bool = True,
+    upload_threshold: float = 0.0,
     foo: Input[Dataset] = None
 ):
     
@@ -41,6 +43,8 @@ def pipeline(
     )
     
     data = components.split_data(ratio=0.1, dataset=importer.output)
+    train = data.outputs["train"]
+    test = data.outputs["test"]
     
     train_model_op = custom_job.create_custom_training_job_op_from_component(
         component_spec = components.train_model,
@@ -50,14 +54,15 @@ def pipeline(
         service_account = configs.service_account
     )
     
-    train_model = train_model_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
+    train_model = train_model_op(epochs=epochs, dataset=train, location = configs.location)
+    model = train_model.outputs["oracle"]
     
-    components.shap_explainer(rows=4, cols=5, dataset=data.outputs["test"], model=train_model.outputs["oracle"])
+    components.shap_explainer(rows=4, cols=5, dataset=test, model=model)
     
-    metric = components.metrics(dataset=data.outputs["test"], model=train_model.outputs["oracle"])
-    
-    with If(metric.output >= 0):
-        
+    metric = components.metrics(dataset=test, model=model).outputs["Output"]
+
+    with If(upload and metric > upload_threshold, name="metric > threshold"):
+        components.upload_model(model=model)
 
 
 # -

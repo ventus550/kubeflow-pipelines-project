@@ -4,7 +4,34 @@
 #    dataset: str [Default: 'gs://protocell/data/words.npz']
 #    epochs: int [Default: 10.0]
 #    foo: system.Dataset
+#    upload: bool [Default: True]
+#    upload_threshold: float [Default: 0.0]
 components:
+  comp-condition-1:
+    dag:
+      tasks:
+        upload-model:
+          cachingOptions:
+            enableCache: true
+          componentRef:
+            name: comp-upload-model
+          inputs:
+            artifacts:
+              model:
+                componentInputArtifact: pipelinechannel--train-model-oracle
+          taskInfo:
+            name: upload-model
+    inputDefinitions:
+      artifacts:
+        pipelinechannel--train-model-oracle:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        pipelinechannel--metrics-Output:
+          parameterType: NUMBER_INTEGER
+        pipelinechannel--upload_threshold:
+          parameterType: NUMBER_DOUBLE
   comp-importer:
     executorLabel: exec-importer
     inputDefinitions:
@@ -225,8 +252,8 @@ components:
                 \ count:\", model.count_params())\n    model.summary()\n\n\n    model.fit(\n\
                 \        X_train, Y_train,\n        validation_split = 0.1,\n    \
                 \    epochs = epochs,\n        callbacks = [tensorboard, checkpoints,\
-                \ plateau]\n    )\n\n    aitoolkit.save(model, f\"{oracle.path}/model.h5\"\
-                , frozen = True)\n\n"
+                \ plateau]\n    )\n\n    # aitoolkit.save(model, oracle.path)\n  \
+                \  model.save(f\"{oracle.path}.keras\")\n\n"
               env: []
               image_uri: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
             disk_spec:
@@ -245,6 +272,19 @@ components:
             schemaVersion: 0.0.1
       parameters:
         gcp_resources:
+          parameterType: STRING
+  comp-upload-model:
+    executorLabel: exec-upload-model
+    inputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        container_image:
+          defaultValue: europe-docker.pkg.dev/vertex-ai-restricted/prediction/tf_opt-cpu.2-15:latest
+          isOptional: true
           parameterType: STRING
 defaultPipelineRoot: gs://protocell/pipeline
 deploymentSpec:
@@ -289,7 +329,7 @@ deploymentSpec:
           \   from src import aitoolkit\n    from src.utils import capture_image\n\
           \    import seaborn\n    import numpy\n\n    X, Y = numpy.load(dataset.path\
           \ + \".npz\").values()\n    X, Y = aitoolkit.format_data(X, Y, aitoolkit.characters)\n\
-          \    model = aitoolkit.load(f\"{model.path}/model.h5\")\n    batch = aitoolkit.batch_prediction(model,\
+          \    model = aitoolkit.load(model.path)\n    batch = aitoolkit.batch_prediction(model,\
           \ X, Y)\n\n    edit_distance_values = numpy.array([sample.value for sample\
           \ in batch])\n    seaborn.histplot(edit_distance_values, bins=10, kde=True,\
           \ alpha=0.6)\n    open(edit_distance_histogram.path, 'w').write(f\"![Image]({capture_image()})\"\
@@ -332,17 +372,16 @@ deploymentSpec:
           \ as tf\n\n    from src import aitoolkit\n    from src.utils import capture_image\n\
           \n    characters = aitoolkit.characters\n    X, Y = numpy.load(dataset.path\
           \ + \".npz\").values()\n    X, Y = aitoolkit.format_data(X, Y, characters)\n\
-          \    model = aitoolkit.load(f\"{model.path}/model.h5\")\n\n    # repurpose\
-          \ model for \"classification\"\n    classifier = keras.models.Model(model.input,\
-          \ tf.reduce_max(model.output, axis=1)[:, :len(characters)])\n\n    masker\
-          \ = shap.maskers.Image(\"inpaint_telea\", X[0].shape)\n    explainer = shap.Explainer(classifier,\
-          \ masker, output_names=list(characters))\n    indices = numpy.random.randint(len(X),\
-          \ size=rows)\n    shap_values = explainer(X[indices], max_evals=100, batch_size=1000,\
-          \ outputs=shap.Explanation.argsort.flip[:cols])\n\n    labels = shap_values.output_names\n\
-          \    if len(numpy.shape(shap_values.output_names)) == 1:\n        # shap\
-          \ is an awful library and thus requires awful fixes\n        labels = numpy.reshape(labels\
-          \ * rows, (rows, cols))\n\n    shap.image_plot(shap_values, labels=labels)\n\
-          \    open(explanation.path, 'w').write(f\"![Image]({capture_image()})\"\
+          \    model = aitoolkit.load(model.path)\n\n    # repurpose model for \"\
+          classification\"\n    classifier = keras.models.Model(model.input, tf.reduce_max(model.output,\
+          \ axis=1)[:, :len(characters)])\n\n    masker = shap.maskers.Image(\"inpaint_telea\"\
+          , X[0].shape)\n    explainer = shap.Explainer(classifier, masker, output_names=list(characters))\n\
+          \    indices = numpy.random.randint(len(X), size=rows)\n    shap_values\
+          \ = explainer(X[indices], max_evals=100, batch_size=1000, outputs=shap.Explanation.argsort.flip[:cols])\n\
+          \n    labels = shap_values.output_names\n    if len(numpy.shape(shap_values.output_names))\
+          \ == 1:\n        # shap is an awful library and thus requires awful fixes\n\
+          \        labels = numpy.reshape(labels * rows, (rows, cols))\n\n    shap.image_plot(shap_values,\
+          \ labels=labels)\n    open(explanation.path, 'w').write(f\"![Image]({capture_image()})\"\
           )\n\n"
         image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
     exec-split-data:
@@ -406,11 +445,71 @@ deploymentSpec:
         - -m
         - google_cloud_pipeline_components.container.v1.custom_job.launcher
         image: gcr.io/ml-pipeline/google-cloud-pipeline-components:2.8.0
+    exec-upload-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - upload_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef upload_model(\n    model: Input[Model],\n    container_image:\
+          \ str = \"europe-docker.pkg.dev/vertex-ai-restricted/prediction/tf_opt-cpu.2-15:latest\"\
+          \n):                                                         \n    from\
+          \ google.cloud import aiplatform\n    from src import aitoolkit\n    from\
+          \ src.secrets import configs\n\n    model = aitoolkit.load(model.path)\n\
+          \    model.save(model.path, save_format=\"tf\")\n\n    print(\"uploading\
+          \ to model registry\")\n    model = aiplatform.Model.upload(\n        display_name=configs.model,\n\
+          \        artifact_uri=model.path,\n        serving_container_image_uri=container_image\n\
+          \    )\n\n"
+        image: europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
 pipelineInfo:
   name: oracle
 root:
   dag:
     tasks:
+      condition-1:
+        componentRef:
+          name: comp-condition-1
+        dependentTasks:
+        - metrics
+        - train-model
+        inputs:
+          artifacts:
+            pipelinechannel--train-model-oracle:
+              taskOutputArtifact:
+                outputArtifactKey: oracle
+                producerTask: train-model
+          parameters:
+            pipelinechannel--metrics-Output:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: metrics
+            pipelinechannel--upload_threshold:
+              componentInputParameter: upload_threshold
+        taskInfo:
+          name: metric > threshold
+        triggerPolicy:
+          condition: double(int(inputs.parameter_values['pipelinechannel--metrics-Output']))
+            > inputs.parameter_values['pipelinechannel--upload_threshold']
       importer:
         cachingOptions:
           enableCache: true
@@ -525,5 +624,13 @@ root:
         defaultValue: 10.0
         isOptional: true
         parameterType: NUMBER_INTEGER
+      upload:
+        defaultValue: true
+        isOptional: true
+        parameterType: BOOLEAN
+      upload_threshold:
+        defaultValue: 0.0
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
 schemaVersion: 2.1.0
 sdkVersion: kfp-2.4.0
