@@ -2,6 +2,7 @@ numpy
 scipy
 matplotlib
 google-cloud-storage
+google-cloud-aiplatform
 opencv-python-headless
 opencv-contrib-python-headless
 tensorflow==2.15.0

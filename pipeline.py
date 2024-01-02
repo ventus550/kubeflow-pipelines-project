@@ -5,7 +5,7 @@ from kfp import compiler, dsl
 from kfp.dsl import (
     Artifact, Dataset, Input, InputPath,
     Model, Output, OutputPath, component,
-    ParallelFor
+    ParallelFor, If
 )
 
 import google_cloud_pipeline_components.v1.custom_job.utils as custom_job
@@ -52,9 +52,12 @@ def pipeline(
     
     train_model = train_model_op(epochs=epochs, dataset=data.outputs["train"], location = configs.location)
     
-    components.metrics(dataset=data.outputs["test"], model=train_model.outputs["oracle"])
-    
     components.shap_explainer(rows=4, cols=5, dataset=data.outputs["test"], model=train_model.outputs["oracle"])
+    
+    metric = components.metrics(dataset=data.outputs["test"], model=train_model.outputs["oracle"])
+    
+    with If(metric.output >= 0):
+        
 
 
 # -
