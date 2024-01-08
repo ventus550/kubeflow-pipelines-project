@@ -41,6 +41,10 @@ class Configs:
         return self.data["project"]
 
     @property
+    def tensorboard(self):
+        return self.datap["tensorboard"]
+
+    @property
     def artifactory(self):
         return f"https://{self.location}-kfp.pkg.dev/{self.project}/{self.data['artifactory']}"
 

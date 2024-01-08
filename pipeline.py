@@ -1,22 +1,13 @@
 # +
-from typing import NamedTuple
 from google.cloud import aiplatform
 from kfp.registry import RegistryClient
 from kfp import compiler, dsl
 from kfp.dsl import (
-    Artifact,
     Dataset,
     Input,
-    InputPath,
     Model,
-    Output,
-    OutputPath,
-    component,
-    ParallelFor,
     If,
     Else,
-    OneOf,
-    Condition,
 )
 
 import google_cloud_pipeline_components.v1.custom_job.utils as custom_job
@@ -27,7 +18,7 @@ from src.secrets import configs
 
 # ## Static Configuration
 
-TENSORBOARD_ID = "2373397003624251392"
+TENSORBOARD_ID = configs.tensorboard
 ACCELERATOR_TYPE = "NVIDIA_TESLA_T4"
 TRAIN_LOCATION = configs.location
 
