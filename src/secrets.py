@@ -42,7 +42,7 @@ class Configs:
 
     @property
     def tensorboard(self):
-        return self.datap["tensorboard"]
+        return self.data["tensorboard"]
 
     @property
     def artifactory(self):

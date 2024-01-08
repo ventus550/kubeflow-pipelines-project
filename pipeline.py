@@ -19,8 +19,8 @@ from src.secrets import configs
 # ## Static Configuration
 
 TENSORBOARD_ID = configs.tensorboard
-ACCELERATOR_TYPE = "NVIDIA_TESLA_T4"
 TRAIN_LOCATION = configs.location
+ACCELERATOR_TYPE = "NVIDIA_TESLA_T4"
 
 # ## Pipeline definition
 
