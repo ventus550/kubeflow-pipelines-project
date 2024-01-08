@@ -18,7 +18,7 @@ from src.secrets import configs
 
 # ## Static Configuration
 
-TENSORBOARD_ID = configs.tensorboard
+TENSORBOARD_ID = str(configs.tensorboard)
 TRAIN_LOCATION = configs.location
 ACCELERATOR_TYPE = "NVIDIA_TESLA_T4"
 
