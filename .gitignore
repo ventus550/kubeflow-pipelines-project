@@ -5,6 +5,7 @@
 data
 *.ipynb
 *.h5
+run.py
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
