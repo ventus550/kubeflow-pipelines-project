@@ -14,7 +14,7 @@ This repository contains a machine learning project implemented using Kubeflow o
 # Google cloud services
 The following services and APIs need to be enabled and configured accordingly.
 
-## Secret Manager
+### Secret Manager
 Secret Manager enables one to store otherwise sensitive data. We use it for our project configuration.
 The file is expected to be in json format and resemble the following:
 ```
@@ -32,19 +32,19 @@ The file is expected to be in json format and resemble the following:
 Also, all other services should adhere to the configs provided.
 
 
-## Vertex AI
+### Vertex AI
 - Pipelines (Kubeflow)
 - Tensorboard
 - Model Registry
 
 
-## Cloud Storage
+### Cloud Storage
 One standard class storage bucket with training data and a separate one for the tensorboard instance.
 
-## Artifact Registry
+### Artifact Registry
 Docker and kubeflow registry preferably with a frequent clean up rule.
 
-## Cloud Build
+### Cloud Build
 To fully automate the CI/CD process the project can be connected to the github repository through Cloud Build.
 This way docker images and the pipeline template are always up to date and synched with the code changes in the github repository.
 
