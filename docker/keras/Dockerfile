@@ -1,4 +1,4 @@
-FROM europe-central2-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
+FROM europe-west1-docker.pkg.dev/protocell-404013/kubeflow-images/keras:latest
 # use "FROM mirror.gcr.io/library/python:3.10" for the first keras image
 
 WORKDIR /
