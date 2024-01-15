@@ -25,7 +25,7 @@ The file is expected to be in json format and resemble the following:
 	"artifactory": "<kubeflow artifact registry name>",
 	"dockfactory": "<docker artifact registry name>",
 	"model": "<model name>",
-  "tensorboard": "<tensorboard-id>",
+  	"tensorboard": "<tensorboard-id>",
 	"service_account": "<id>-compute@developer.gserviceaccount.com"
 }
 ```
